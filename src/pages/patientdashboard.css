@@ -1,0 +1,10 @@
+/* src/pages/PatientDashboard.css */
+.dashboard-container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 1rem;
+}
+
+.device-control {
+    margin-bottom: 1rem;
+}

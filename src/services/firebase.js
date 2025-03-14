@@ -2,19 +2,27 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
+// Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID",
+    apiKey: "AIzaSyCoPj1KYM3xaDcB2i4UQus6wppiR60ITf4",
+    authDomain: "physio-app-8f31d.firebaseapp.com",
+    projectId: "physio-app-8f31d",
+    storageBucket: "physio-app-8f31d.firebasestorage.app",
+    messagingSenderId: "1099010545807",
+    appId: "1:1099010545807:web:3f9eacd48a5e85fea538fa",
+    measurementId: "G-D0337ECSBV"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firebase Authentication
 export const auth = getAuth(app);
+
+// Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
 
+// Function to handle Google Sign-In
 export const signInWithGoogle = async () => {
     try {
         const result = await signInWithPopup(auth, googleProvider);

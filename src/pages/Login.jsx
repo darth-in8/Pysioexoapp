@@ -12,6 +12,7 @@ import {
     Paper,
     Divider,
     Box,
+    Slide,
 } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 
@@ -40,109 +41,113 @@ const Login = () => {
     const handleGoogleSignIn = async () => {
         try {
             const user = await signInWithGoogle();
+            console.log('Google Sign-In Success:', user);
             // Redirect based on user role (e.g., user.role === 'patient' ? '/patient' : '/doctor')
             navigate('/patient'); // Temporary redirect
         } catch (error) {
+            console.error('Google Sign-In Error:', error);
             setError('Failed to sign in with Google.');
         }
     };
 
     return (
         <Container maxWidth="sm">
-            <Paper elevation={3} sx={{ padding: 4, marginTop: 8 }}>
-                <Typography variant="h4" align="center" gutterBottom>
-                    {isSignUp ? 'Sign Up' : 'Sign In'}
-                </Typography>
-                <form onSubmit={handleSubmit(onSubmit)}>
-                    <Grid container spacing={2}>
-                        {isSignUp && (
+            <Slide direction="up" in={true} mountOnEnter unmountOnExit>
+                <Paper elevation={3} sx={{ padding: 4, marginTop: 8, borderRadius: 4 }}>
+                    <Typography variant="h4" align="center" gutterBottom>
+                        {isSignUp ? 'Sign Up' : 'Sign In'}
+                    </Typography>
+                    <form onSubmit={handleSubmit(onSubmit)}>
+                        <Grid container spacing={2}>
+                            {isSignUp && (
+                                <Grid item xs={12}>
+                                    <TextField
+                                        fullWidth
+                                        label="Full Name"
+                                        {...register('fullName', { required: 'Full Name is required' })}
+                                        error={!!errors.fullName}
+                                        helperText={errors.fullName?.message}
+                                    />
+                                </Grid>
+                            )}
                             <Grid item xs={12}>
                                 <TextField
                                     fullWidth
-                                    label="Full Name"
-                                    {...register('fullName', { required: 'Full Name is required' })}
-                                    error={!!errors.fullName}
-                                    helperText={errors.fullName?.message}
+                                    label="Email"
+                                    type="email"
+                                    {...register('email', { required: 'Email is required' })}
+                                    error={!!errors.email}
+                                    helperText={errors.email?.message}
                                 />
                             </Grid>
-                        )}
-                        <Grid item xs={12}>
-                            <TextField
-                                fullWidth
-                                label="Email"
-                                type="email"
-                                {...register('email', { required: 'Email is required' })}
-                                error={!!errors.email}
-                                helperText={errors.email?.message}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <TextField
-                                fullWidth
-                                label="Password"
-                                type="password"
-                                {...register('password', { required: 'Password is required' })}
-                                error={!!errors.password}
-                                helperText={errors.password?.message}
-                            />
-                        </Grid>
-                        {isSignUp && (
                             <Grid item xs={12}>
                                 <TextField
                                     fullWidth
-                                    label="Confirm Password"
+                                    label="Password"
                                     type="password"
-                                    {...register('confirmPassword', {
-                                        required: 'Confirm Password is required',
-                                    })}
-                                    error={!!errors.confirmPassword}
-                                    helperText={errors.confirmPassword?.message}
+                                    {...register('password', { required: 'Password is required' })}
+                                    error={!!errors.password}
+                                    helperText={errors.password?.message}
                                 />
                             </Grid>
-                        )}
-                        <Grid item xs={12}>
-                            <Button
-                                type="submit"
-                                fullWidth
-                                variant="contained"
-                                color="primary"
-                                size="large"
-                            >
-                                {isSignUp ? 'Sign Up' : 'Sign In'}
-                            </Button>
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Divider sx={{ marginY: 2 }}>OR</Divider>
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Button
-                                fullWidth
-                                variant="outlined"
-                                startIcon={<GoogleIcon />}
-                                onClick={handleGoogleSignIn}
-                            >
-                                Sign {isSignUp ? 'Up' : 'In'} with Google
-                            </Button>
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Box textAlign="center">
-                                <Button onClick={() => setIsSignUp(!isSignUp)}>
-                                    {isSignUp
-                                        ? 'Already have an account? Sign In'
-                                        : "Don't have an account? Sign Up"}
-                                </Button>
-                            </Box>
-                        </Grid>
-                        {error && (
+                            {isSignUp && (
+                                <Grid item xs={12}>
+                                    <TextField
+                                        fullWidth
+                                        label="Confirm Password"
+                                        type="password"
+                                        {...register('confirmPassword', {
+                                            required: 'Confirm Password is required',
+                                        })}
+                                        error={!!errors.confirmPassword}
+                                        helperText={errors.confirmPassword?.message}
+                                    />
+                                </Grid>
+                            )}
                             <Grid item xs={12}>
-                                <Typography color="error" align="center">
-                                    {error}
-                                </Typography>
+                                <Button
+                                    type="submit"
+                                    fullWidth
+                                    variant="contained"
+                                    color="primary"
+                                    size="large"
+                                >
+                                    {isSignUp ? 'Sign Up' : 'Sign In'}
+                                </Button>
                             </Grid>
-                        )}
-                    </Grid>
-                </form>
-            </Paper>
+                            <Grid item xs={12}>
+                                <Divider sx={{ marginY: 2 }}>OR</Divider>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    startIcon={<GoogleIcon />}
+                                    onClick={handleGoogleSignIn}
+                                >
+                                    Sign {isSignUp ? 'Up' : 'In'} with Google
+                                </Button>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Box textAlign="center">
+                                    <Button onClick={() => setIsSignUp(!isSignUp)}>
+                                        {isSignUp
+                                            ? 'Already have an account? Sign In'
+                                            : "Don't have an account? Sign Up"}
+                                    </Button>
+                                </Box>
+                            </Grid>
+                            {error && (
+                                <Grid item xs={12}>
+                                    <Typography color="error" align="center">
+                                        {error}
+                                    </Typography>
+                                </Grid>
+                            )}
+                        </Grid>
+                    </form>
+                </Paper>
+            </Slide>
         </Container>
     );
 };
