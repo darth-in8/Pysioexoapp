@@ -1,53 +1,88 @@
-// src/pages/DoctorDashboard.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { ref, onValue } from 'firebase/database';
+import { db } from '../services/firebase';
 import {
-    Container,
-    Typography,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Slide,
+    Box, Typography, Paper, Table,
+    TableBody, TableCell, TableContainer,
+    TableHead, TableRow, LinearProgress
 } from '@mui/material';
+import { LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 
-const patients = [
-    { id: 1, name: 'John Doe', progress: 70 },
-    { id: 2, name: 'Jane Smith', progress: 50 },
-];
+export default function DoctorView() {
+    const [sessions, setSessions] = useState([]);
+    const [selectedSession, setSelectedSession] = useState(null);
 
-const DoctorDashboard = () => {
+    useEffect(() => {
+        const sessionsRef = ref(db, 'doctor/analysis');
+        onValue(sessionsRef, (snapshot) => {
+            const data = [];
+            snapshot.forEach((child) => {
+                data.push({
+                    id: child.key,
+                    timestamp: new Date(Number(child.key)).toLocaleString(),
+                    data: child.val()
+                });
+            });
+            setSessions(data.reverse()); // Newest first
+        });
+    }, []);
+
+    const formatGraphData = (rawData) => {
+        return Object.entries(rawData).map(([key, value]) => ({
+            time: parseFloat(key.substring(2)), // extracts m_1.5 → 1.5
+            value
+        })).sort((a,b) => a.time - b.time);
+    };
+
     return (
-        <Container maxWidth="md">
-            <Slide direction="up" in={true} mountOnEnter unmountOnExit>
-                <Paper elevation={3} sx={{ padding: 4, marginTop: 4, borderRadius: 4 }}>
-                    <Typography variant="h4" align="center" gutterBottom>
-                        Doctor Dashboard
-                    </Typography>
-                    <TableContainer component={Paper}>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Patient Name</TableCell>
-                                    <TableCell align="right">Progress</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {patients.map((patient) => (
-                                    <TableRow key={patient.id}>
-                                        <TableCell>{patient.name}</TableCell>
-                                        <TableCell align="right">{patient.progress}%</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Paper>
-            </Slide>
-        </Container>
-    );
-};
+        <Paper elevation={3} sx={{ p: 4 }}>
+            <Typography variant="h4" gutterBottom>
+                Patient Movement Analysis
+            </Typography>
 
-export default DoctorDashboard;
+            <TableContainer sx={{ mb: 4 }}>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableCell>Session Time</TableCell>
+                            <TableCell>Actions</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {sessions.map((session) => (
+                            <TableRow key={session.id}>
+                                <TableCell>{session.timestamp}</TableCell>
+                                <TableCell>
+                                    <Button onClick={() => setSelectedSession(session)}>
+                                        View Details
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+
+            {selectedSession && (
+                <Box sx={{ mt: 4 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Session: {selectedSession.timestamp}
+                    </Typography>
+                    <Box sx={{ height: 400 }}>
+                        <LineChart
+                            width={800}
+                            height={400}
+                            data={formatGraphData(selectedSession.data)}
+                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                            <XAxis dataKey="time" label="Time (seconds)" />
+                            <YAxis label="Movement Range" domain={[0, 1023]} />
+                            <Tooltip />
+                            <Line type="monotone" dataKey="value" stroke="#8884d8" />
+                        </LineChart>
+                    </Box>
+                </Box>
+            )}
+        </Paper>
+    );
+}
