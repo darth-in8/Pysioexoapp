@@ -23,10 +23,17 @@ import {
 } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const EXERCISE_PRESETS = [
+// Exercise Presets
+const HAND_PRESETS = [
     { id: 1, name: "Basic Flexion", cycles: 5, duration: 5, description: "Standard flexion exercise (5s hold)" },
     { id: 2, name: "Intensive Rehab", cycles: 8, duration: 8, description: "Longer holds for intensive therapy" },
     { id: 3, name: "Gentle Warm-up", cycles: 3, duration: 3, description: "Shorter holds for warm-up" }
+];
+
+const EXOSKELETON_PRESETS = [
+    { id: 1, name: "Basic Movement", sets: 4, speed: 150 },
+    { id: 2, name: "Strength Training", sets: 6, speed: 200 },
+    { id: 3, name: "Recovery Mode", sets: 3, speed: 100 }
 ];
 
 const HOLD_DURATIONS = [
@@ -36,18 +43,48 @@ const HOLD_DURATIONS = [
 ];
 
 const PatientDashboard = () => {
+    // Tab state
     const [activeTab, setActiveTab] = useState(0);
-    const [isRunning, setIsRunning] = useState(false);
+
+    // Hand rehabilitation states
+    const [isHandRunning, setIsHandRunning] = useState(false);
     const [cycles, setCycles] = useState(5);
-    const [progress, setProgress] = useState(0);
+    const [handProgress, setHandProgress] = useState(0);
     const [holdDuration, setHoldDuration] = useState(5);
     const [emergency, setEmergency] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [monitoring, setMonitoring] = useState(false);
     const [flexValue, setFlexValue] = useState(0);
     const [flexHistory, setFlexHistory] = useState([]);
-    const [exerciseComplete, setExerciseComplete] = useState(false);
+    const [handExerciseComplete, setHandExerciseComplete] = useState(false);
 
+    // Exoskeleton states
+    const [exoSets, setExoSets] = useState(4);
+    const [exoSpeed, setExoSpeed] = useState(150);
+    const [exoStatus, setExoStatus] = useState("Ready");
+    const [exoMovements, setExoMovements] = useState(0);
+    const [exoConfirmOpen, setExoConfirmOpen] = useState(false);
+    const [isExoRunning, setIsExoRunning] = useState(false);
+
+    // Simulate exoskeleton movement
+    useEffect(() => {
+        let interval;
+        if (exoStatus === "Running") {
+            interval = setInterval(() => {
+                setExoMovements(prev => {
+                    const newCount = prev + 1;
+                    if (newCount >= exoSets * 5) { // Assume 5 movements per set
+                        setExoStatus("Complete");
+                        return newCount;
+                    }
+                    return newCount;
+                });
+            }, 2000);
+        }
+        return () => clearInterval(interval);
+    }, [exoStatus, exoSets]);
+
+    // Firebase listeners for hand rehabilitation
     useEffect(() => {
         const progressRef = ref(db, 'glove/progress');
         const commandRef = ref(db, 'glove/command');
@@ -58,18 +95,18 @@ const PatientDashboard = () => {
 
         const unsubscribeProgress = onValue(progressRef, (snapshot) => {
             const newProgress = snapshot.val() || 0;
-            setProgress(newProgress);
+            setHandProgress(newProgress);
             if (newProgress >= 100) {
-                setExerciseComplete(true);
+                setHandExerciseComplete(true);
             }
         });
 
         const unsubscribeCommand = onValue(commandRef, (snapshot) => {
             const command = snapshot.val();
-            setIsRunning(command === "START");
+            setIsHandRunning(command === "START");
             if (command === "DONE") {
-                setIsRunning(false);
-                setExerciseComplete(true);
+                setIsHandRunning(false);
+                setHandExerciseComplete(true);
             }
         });
 
@@ -106,9 +143,10 @@ const PatientDashboard = () => {
         };
     }, []);
 
-    const startExercise = async () => {
+    // Hand rehabilitation functions
+    const startHandExercise = async () => {
         try {
-            setExerciseComplete(false);
+            setHandExerciseComplete(false);
             await set(ref(db, 'glove'), {
                 command: "START",
                 cycles: Math.min(Math.max(cycles, 1), 10),
@@ -123,11 +161,11 @@ const PatientDashboard = () => {
         }
     };
 
-    const resetExercise = async () => {
+    const resetHandExercise = async () => {
         try {
             await set(ref(db, 'glove/command'), "READY");
-            setProgress(0);
-            setExerciseComplete(false);
+            setHandProgress(0);
+            setHandExerciseComplete(false);
         } catch (error) {
             console.error("Error resetting exercise:", error);
         }
@@ -149,52 +187,79 @@ const PatientDashboard = () => {
     const handleEmergencyStop = async () => {
         try {
             await set(ref(db, 'glove/emergencyStop'), true);
+            setExoStatus("Emergency Stop");
         } catch (error) {
             console.error("Emergency stop failed:", error);
             alert("Emergency stop failed! Check device connection.");
         }
     };
 
-    const applyPreset = (preset) => {
-        if (!isRunning) {
+    const applyHandPreset = (preset) => {
+        if (!isHandRunning) {
             setCycles(preset.cycles);
             setHoldDuration(preset.duration);
         }
     };
 
-    const currentCycle = progress > 0 ? Math.ceil(progress / (100 / cycles)) : 0;
+    // Exoskeleton functions
+    const startExoskeleton = () => {
+        try {
+            setExoStatus("Running");
+            setExoMovements(0);
+            setIsExoRunning(true);
+        } catch (error) {
+            console.error("Error starting exoskeleton:", error);
+            alert("Failed to start exoskeleton exercise. Please try again.");
+        }
+    };
+
+    const resetExoskeleton = () => {
+        setExoStatus("Ready");
+        setExoMovements(0);
+        setIsExoRunning(false);
+    };
+
+    const applyExoPreset = (preset) => {
+        if (!isExoRunning) {
+            setExoSets(preset.sets);
+            setExoSpeed(preset.speed);
+        }
+    };
+
+    const currentCycle = handProgress > 0 ? Math.ceil(handProgress / (100 / cycles)) : 0;
 
     return (
         <Paper elevation={3} sx={{
             p: 4,
-            maxWidth: 800,
+            maxWidth: 1000,
             mx: 'auto',
             mt: 4,
             '& .MuiFormControl-root': { mb: 3 }
         }}>
             <Typography variant="h5" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
-                Hand Rehabilitation Controller
+                Patient Dashboard
             </Typography>
 
             <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
-                <Tab label="Guided Exercise" />
+                <Tab label="Hand Rehabilitation" />
+                <Tab label="Exoskeleton Control" />
                 <Tab label="Free Movement" />
             </Tabs>
 
             {activeTab === 0 ? (
                 <>
-                    {/* Guided Exercise Tab Content */}
+                    {/* Hand Rehabilitation Tab Content */}
                     <Box sx={{ mb: 3 }}>
                         <Typography variant="subtitle1" component="h2" gutterBottom>
                             Exercise Presets:
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {EXERCISE_PRESETS.map((preset) => (
+                            {HAND_PRESETS.map((preset) => (
                                 <Button
                                     key={preset.id}
                                     variant="outlined"
-                                    onClick={() => applyPreset(preset)}
-                                    disabled={isRunning}
+                                    onClick={() => applyHandPreset(preset)}
+                                    disabled={isHandRunning}
                                     sx={{ mb: 1 }}
                                 >
                                     <Box textAlign="center">
@@ -218,7 +283,7 @@ const PatientDashboard = () => {
                             step={1}
                             marks
                             valueLabelDisplay="auto"
-                            disabled={isRunning}
+                            disabled={isHandRunning}
                         />
                     </Box>
 
@@ -227,7 +292,7 @@ const PatientDashboard = () => {
                         <Select
                             value={holdDuration}
                             onChange={(e) => setHoldDuration(e.target.value)}
-                            disabled={isRunning}
+                            disabled={isHandRunning}
                             label="Hold Duration"
                         >
                             {HOLD_DURATIONS.map((duration) => (
@@ -240,11 +305,11 @@ const PatientDashboard = () => {
 
                     <Box sx={{ mb: 3 }}>
                         <Typography gutterBottom>
-                            Exercise Progress: {progress}%
+                            Exercise Progress: {handProgress}%
                         </Typography>
                         <LinearProgress
                             variant="determinate"
-                            value={progress}
+                            value={handProgress}
                             sx={{ height: 10, borderRadius: 5 }}
                         />
                         <Typography variant="body2" sx={{ mt: 1, textAlign: 'right' }}>
@@ -256,19 +321,19 @@ const PatientDashboard = () => {
                         <Button
                             variant="contained"
                             onClick={() => setConfirmOpen(true)}
-                            disabled={isRunning || emergency || exerciseComplete}
+                            disabled={isHandRunning || emergency || handExerciseComplete}
                             fullWidth
                             sx={{ py: 2 }}
                         >
-                            {exerciseComplete ? 'Exercise Completed' :
-                                isRunning ? 'Exercise In Progress' : 'Start Exercise'}
+                            {handExerciseComplete ? 'Exercise Completed' :
+                                isHandRunning ? 'Exercise In Progress' : 'Start Exercise'}
                         </Button>
 
                         <Button
                             variant="contained"
                             color="error"
                             onClick={handleEmergencyStop}
-                            disabled={!isRunning || emergency}
+                            disabled={!isHandRunning || emergency}
                             fullWidth
                             sx={{ py: 2 }}
                         >
@@ -276,14 +341,151 @@ const PatientDashboard = () => {
                         </Button>
                     </Box>
 
-                    {exerciseComplete && (
+                    {handExerciseComplete && (
                         <Button
                             variant="outlined"
-                            onClick={resetExercise}
+                            onClick={resetHandExercise}
                             fullWidth
                             sx={{ mt: 2 }}
                         >
                             Reset Exercise
+                        </Button>
+                    )}
+                </>
+            ) : activeTab === 1 ? (
+                <>
+                    {/* Exoskeleton Control Tab Content */}
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="subtitle1" component="h2" gutterBottom>
+                            Exoskeleton Presets:
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                            {EXOSKELETON_PRESETS.map((preset) => (
+                                <Button
+                                    key={preset.id}
+                                    variant="outlined"
+                                    onClick={() => applyExoPreset(preset)}
+                                    disabled={isExoRunning}
+                                    sx={{ mb: 1 }}
+                                >
+                                    <Box textAlign="center">
+                                        <Typography>{preset.name}</Typography>
+                                        <Typography variant="caption" display="block">
+                                            {preset.sets} sets @ {preset.speed} speed
+                                        </Typography>
+                                    </Box>
+                                </Button>
+                            ))}
+                        </Box>
+                    </Box>
+
+                    <Box sx={{ mb: 3 }}>
+                        <Typography id="sets-slider" gutterBottom>
+                            Number of Sets: {exoSets}
+                        </Typography>
+                        <Slider
+                            value={exoSets}
+                            //onChange={(e, newValue) => setExoSets(newValue)}
+                            min={1}
+                            max={10}
+                            step={1}
+                            marks
+                            valueLabelDisplay="auto"
+                            disabled={isExoRunning}
+                        />
+                    </Box>
+
+                    <Box sx={{ mb: 3 }}>
+                        <Typography id="speed-slider" gutterBottom>
+                            Motor Speed: {exoSpeed}
+                        </Typography>
+                        <Slider
+                            value={exoSpeed}
+                            //onChange={(e, newValue) => setExoSpeed(newValue)}
+                            min={50}
+                            max={255}
+                            step={5}
+                            marks={[
+                                { value: 50, label: '50' },
+                                { value: 255, label: '255' }
+                            ]}
+                            valueLabelDisplay="auto"
+                            disabled={isExoRunning}
+                        />
+                    </Box>
+
+                    <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Typography variant="body1">Status:</Typography>
+                            <Typography
+                                variant="body1"
+                                sx={{
+                                    px: 1,
+                                    py: 0.5,
+                                    borderRadius: 1,
+                                    bgcolor: exoStatus === "Running" ? 'success.light' :
+                                        exoStatus === "Complete" ? 'info.light' :
+                                            exoStatus === "Emergency Stop" ? 'error.light' :
+                                                'grey.300',
+                                    color: exoStatus === "Running" ? 'success.contrastText' :
+                                        exoStatus === "Complete" ? 'info.contrastText' :
+                                            exoStatus === "Emergency Stop" ? 'error.contrastText' :
+                                                'grey.800'
+                                }}
+                            >
+                                {exoStatus}
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                            <Typography variant="body1">Movement Count:</Typography>
+                            <Typography variant="h6">{exoMovements}</Typography>
+                        </Box>
+                        {exoStatus === "Running" && (
+                            <Box sx={{ mt: 2 }}>
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={(exoMovements / (exoSets * 5)) * 100}
+                                    sx={{ height: 10, borderRadius: 5 }}
+                                />
+                                <Typography variant="body2" sx={{ mt: 1, textAlign: 'right' }}>
+                                    Progress: {Math.round((exoMovements / (exoSets * 5)) * 100)}%
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                            variant="contained"
+                            onClick={() => setExoConfirmOpen(true)}
+                            disabled={isExoRunning || emergency || exoStatus === "Complete"}
+                            fullWidth
+                            sx={{ py: 2 }}
+                        >
+                            {exoStatus === "Complete" ? 'Exercise Completed' :
+                                isExoRunning ? 'Exoskeleton Active' : 'Start Exoskeleton'}
+                        </Button>
+
+                        <Button
+                            variant="contained"
+                            color="error"
+                            onClick={handleEmergencyStop}
+                            disabled={!isExoRunning || emergency}
+                            fullWidth
+                            sx={{ py: 2 }}
+                        >
+                            {emergency ? 'System Stopped' : 'Emergency Stop'}
+                        </Button>
+                    </Box>
+
+                    {exoStatus === "Complete" && (
+                        <Button
+                            variant="outlined"
+                            onClick={resetExoskeleton}
+                            fullWidth
+                            sx={{ mt: 2 }}
+                        >
+                            Reset Exoskeleton
                         </Button>
                     )}
                 </>
@@ -342,10 +544,11 @@ const PatientDashboard = () => {
 
             {emergency && (
                 <Alert severity="error" sx={{ mt: 2 }}>
-                    Emergency release activated! Reset the glove device to continue.
+                    Emergency release activated! Reset the system to continue.
                 </Alert>
             )}
 
+            {/* Hand Exercise Confirmation Dialog */}
             <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
                 <DialogTitle>Confirm Exercise Start</DialogTitle>
                 <DialogContent>
@@ -357,8 +560,27 @@ const PatientDashboard = () => {
                 <DialogActions>
                     <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
                     <Button onClick={() => {
-                        startExercise();
+                        startHandExercise();
                         setConfirmOpen(false);
+                    }} autoFocus>
+                        Confirm
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Exoskeleton Confirmation Dialog */}
+            <Dialog open={exoConfirmOpen} onClose={() => setExoConfirmOpen(false)}>
+                <DialogTitle>Confirm Exoskeleton Start</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        This will start {exoSets} sets at speed {exoSpeed}. Ensure the exoskeleton is properly fitted.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setExoConfirmOpen(false)}>Cancel</Button>
+                    <Button onClick={() => {
+                        startExoskeleton();
+                        setExoConfirmOpen(false);
                     }} autoFocus>
                         Confirm
                     </Button>
