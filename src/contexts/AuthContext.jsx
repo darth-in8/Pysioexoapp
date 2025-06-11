@@ -1,7 +1,7 @@
 // src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../services/firebase';
-import { getUserData } from '../services/firebase';
+import { auth, getUserData } from '../services/firebase';
+import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext();
 
@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
     const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate(); // ✅ For navigation
 
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -29,6 +30,19 @@ export function AuthProvider({ children }) {
 
         return unsubscribe;
     }, []);
+
+    // ✅ Redirect based on role once user and userData are ready
+    useEffect(() => {
+        if (!loading && currentUser && userData) {
+            if (userData.role === 'doctor') {
+                navigate('/doctor');
+            } else if (userData.role === 'patient') {
+                navigate('/patient');
+            } else {
+                navigate('/unknown-role'); // fallback route
+            }
+        }
+    }, [loading, currentUser, userData, navigate]);
 
     return (
         <AuthContext.Provider value={{ currentUser, userData, loading }}>

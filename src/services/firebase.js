@@ -29,16 +29,14 @@ export const db = getDatabase(app);
 export const signInWithGoogle = async () => {
     try {
         const result = await signInWithPopup(auth, googleProvider);
-        // Check if user exists in database
         let userData;
         try {
             userData = await getUserData(result.user.uid);
         } catch {
-            // If user doesn't exist, create a basic profile
             userData = {
                 email: result.user.email,
                 fullName: result.user.displayName || 'New User',
-                role: 'patient' // Default to patient for Google sign-in
+                role: 'patient' // Default role
             };
             await createUserProfile(result.user.uid, userData);
         }
@@ -53,6 +51,7 @@ export const signInWithEmail = async (email, password) => {
     try {
         const result = await signInWithEmailAndPassword(auth, email, password);
         const userData = await getUserData(result.user.uid);
+        console.log("Sign in role:", userData.role); // ✅ Debugging
         return { user: result.user, userData };
     } catch (error) {
         console.error("Email Sign-In Error:", error);
@@ -62,12 +61,10 @@ export const signInWithEmail = async (email, password) => {
 
 export const signUpWithEmail = async (email, password, userData) => {
     try {
+        console.log("Signup with role:", userData.role); // ✅ Debugging
         const result = await createUserWithEmailAndPassword(auth, email, password);
         const user = result.user;
-
-        // Save user data to database
         await createUserProfile(user.uid, userData);
-
         return user;
     } catch (error) {
         console.error("Email Sign-Up Error:", error);
@@ -94,7 +91,6 @@ export const createUserProfile = async (uid, userData) => {
             isActive: true
         });
 
-        // Create role-specific data structure
         if (userData.role === 'doctor') {
             const doctorRef = ref(db, `doctorData/${uid}`);
             await set(doctorRef, {
@@ -129,7 +125,6 @@ export const getUserData = async (uid) => {
     try {
         const userRef = ref(db, `users/${uid}`);
         const snapshot = await get(userRef);
-
         if (snapshot.exists()) {
             return snapshot.val();
         } else {
@@ -145,7 +140,6 @@ export const getRoleSpecificData = async (uid, role) => {
     try {
         const dataRef = ref(db, `${role}Data/${uid}`);
         const snapshot = await get(dataRef);
-
         if (snapshot.exists()) {
             return snapshot.val();
         } else {
@@ -157,12 +151,10 @@ export const getRoleSpecificData = async (uid, role) => {
     }
 };
 
-// Doctor-specific functions
 export const getDoctorPatients = async (doctorUid) => {
     try {
         const patientsRef = ref(db, `doctorData/${doctorUid}/patients`);
         const snapshot = await get(patientsRef);
-
         if (snapshot.exists()) {
             const patientIds = Object.keys(snapshot.val());
             const patientPromises = patientIds.map(id => getUserData(id));
@@ -176,12 +168,10 @@ export const getDoctorPatients = async (doctorUid) => {
     }
 };
 
-// Patient-specific functions
 export const getPatientExercises = async (patientUid) => {
     try {
         const exercisesRef = ref(db, `patientData/${patientUid}/exerciseHistory`);
         const snapshot = await get(exercisesRef);
-
         if (snapshot.exists()) {
             return snapshot.val();
         }

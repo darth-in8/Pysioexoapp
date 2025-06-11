@@ -1,4 +1,3 @@
-// src/pages/Login.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -34,6 +33,7 @@ const Login = () => {
         register,
         handleSubmit,
         reset,
+        getValues,
         formState: { errors },
     } = useForm();
 
@@ -52,7 +52,11 @@ const Login = () => {
         if (newUserType !== null) {
             setUserType(newUserType);
             setError('');
-            reset();
+            reset({
+                email: getValues('email'),
+                password: getValues('password'),
+                confirmPassword: getValues('confirmPassword')
+            });
         }
     };
 
@@ -62,7 +66,6 @@ const Login = () => {
 
         try {
             if (isSignUp) {
-                // Sign up new user
                 const userData = {
                     email: data.email,
                     fullName: data.fullName,
@@ -78,15 +81,29 @@ const Login = () => {
                 };
 
                 await signUpWithEmail(data.email, data.password, userData);
-                // Navigation will be handled by the AuthContext useEffect
             } else {
-                // Sign in existing user
                 await signInWithEmail(data.email, data.password);
-                // Navigation will be handled by the AuthContext useEffect
             }
         } catch (error) {
-            console.error('Authentication Error:', error);
-            setError(error.message || 'Authentication failed. Please try again.');
+            let errorMessage = 'Authentication failed. Please try again.';
+            switch (error.code) {
+                case 'auth/email-already-in-use':
+                    errorMessage = 'Email already in use';
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage = 'Invalid email address';
+                    break;
+                case 'auth/weak-password':
+                    errorMessage = 'Password should be at least 6 characters';
+                    break;
+                case 'auth/wrong-password':
+                    errorMessage = 'Invalid email or password';
+                    break;
+                case 'auth/user-not-found':
+                    errorMessage = 'No account found with this email';
+                    break;
+            }
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -95,13 +112,14 @@ const Login = () => {
     const handleGoogleSignIn = async () => {
         setError('');
         setLoading(true);
-
         try {
-            await signInWithGoogle();
-            // Navigation will be handled by the AuthContext useEffect
+            await signInWithGoogle(userType);
         } catch (error) {
-            console.error('Google Sign-In Error:', error);
-            setError('Failed to sign in with Google. Please try again.');
+            let errorMessage = 'Failed to sign in with Google';
+            if (error.code === 'auth/popup-closed-by-user') {
+                errorMessage = 'Sign in popup was closed';
+            }
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -159,7 +177,13 @@ const Login = () => {
                                     <TextField
                                         fullWidth
                                         label="Full Name"
-                                        {...register('fullName', { required: 'Full Name is required' })}
+                                        {...register('fullName', {
+                                            required: 'Full Name is required',
+                                            minLength: {
+                                                value: 2,
+                                                message: 'Name must be at least 2 characters'
+                                            }
+                                        })}
                                         error={!!errors.fullName}
                                         helperText={errors.fullName?.message}
                                         disabled={loading}
@@ -175,7 +199,15 @@ const Login = () => {
                                             fullWidth
                                             label="Medical License Number"
                                             {...register('licenseNumber', {
-                                                required: 'Medical License Number is required'
+                                                required: 'Medical License Number is required',
+                                                pattern: {
+                                                    value: /^[A-Za-z0-9-]+$/,
+                                                    message: 'Invalid license number format'
+                                                },
+                                                minLength: {
+                                                    value: 6,
+                                                    message: 'License number must be at least 6 characters'
+                                                }
                                             })}
                                             error={!!errors.licenseNumber}
                                             helperText={errors.licenseNumber?.message}
@@ -187,7 +219,11 @@ const Login = () => {
                                             fullWidth
                                             label="Specialization"
                                             {...register('specialization', {
-                                                required: 'Specialization is required'
+                                                required: 'Specialization is required',
+                                                minLength: {
+                                                    value: 3,
+                                                    message: 'Specialization must be at least 3 characters'
+                                                }
                                             })}
                                             error={!!errors.specialization}
                                             helperText={errors.specialization?.message}
@@ -208,7 +244,10 @@ const Login = () => {
                                             {...register('age', {
                                                 required: 'Age is required',
                                                 min: { value: 1, message: 'Age must be at least 1' },
-                                                max: { value: 120, message: 'Age must be less than 120' }
+                                                max: { value: 120, message: 'Age must be less than 120' },
+                                                valueAsNumber: true,
+                                                validate: (value) =>
+                                                    Number.isInteger(value) || 'Age must be a whole number'
                                             })}
                                             error={!!errors.age}
                                             helperText={errors.age?.message}
@@ -220,7 +259,11 @@ const Login = () => {
                                             fullWidth
                                             label="Phone Number"
                                             {...register('phone', {
-                                                required: 'Phone number is required'
+                                                required: 'Phone number is required',
+                                                pattern: {
+                                                    value: /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/,
+                                                    message: 'Invalid phone number format'
+                                                }
                                             })}
                                             error={!!errors.phone}
                                             helperText={errors.phone?.message}
@@ -255,8 +298,12 @@ const Login = () => {
                                     {...register('password', {
                                         required: 'Password is required',
                                         minLength: {
-                                            value: 6,
-                                            message: 'Password must be at least 6 characters'
+                                            value: 8,
+                                            message: 'Password must be at least 8 characters'
+                                        },
+                                        pattern: {
+                                            value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/,
+                                            message: 'Must contain uppercase, lowercase, and number'
                                         }
                                     })}
                                     error={!!errors.password}
@@ -272,8 +319,8 @@ const Login = () => {
                                         type="password"
                                         {...register('confirmPassword', {
                                             required: 'Confirm Password is required',
-                                            validate: (value, { password }) =>
-                                                value === password || 'Passwords do not match'
+                                            validate: (value) =>
+                                                value === getValues('password') || 'Passwords do not match'
                                         })}
                                         error={!!errors.confirmPassword}
                                         helperText={errors.confirmPassword?.message}
@@ -307,7 +354,7 @@ const Login = () => {
                                     color={userType === 'patient' ? 'primary' : 'secondary'}
                                     disabled={loading}
                                 >
-                                    Sign {isSignUp ? 'Up' : 'In'} with Google as {userType === 'patient' ? 'Patient' : 'Doctor'}
+                                    Sign {isSignUp ? 'Up' : 'In'} with Google
                                 </Button>
                             </Grid>
                             <Grid item xs={12}>
