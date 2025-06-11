@@ -277,7 +277,7 @@ const PatientDashboard = () => {
                         </Typography>
                         <Slider
                             value={cycles}
-                            onChange={(e, newValue) => setCycles(newValue)}
+                            //onChange={(e, newValue) => setCycles(newValue)}
                             min={1}
                             max={10}
                             step={1}
