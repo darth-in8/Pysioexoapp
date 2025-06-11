@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ref, set, onValue } from 'firebase/database';
 import { db } from '../services/firebase';
 import {
@@ -19,7 +19,8 @@ import {
     DialogContentText,
     DialogTitle,
     Tabs,
-    Tab
+    Tab,
+    Chip
 } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -31,9 +32,9 @@ const HAND_PRESETS = [
 ];
 
 const EXOSKELETON_PRESETS = [
-    { id: 1, name: "Basic Movement", sets: 4, speed: 150 },
-    { id: 2, name: "Strength Training", sets: 6, speed: 200 },
-    { id: 3, name: "Recovery Mode", sets: 3, speed: 100 }
+    { id: 1, name: "Basic Movement", sets: 4, speed: 150, presetValue: 1 },
+    { id: 2, name: "Strength Training", sets: 6, speed: 200, presetValue: 2 },
+    { id: 3, name: "Recovery Mode", sets: 3, speed: 100, presetValue: 3 }
 ];
 
 const HOLD_DURATIONS = [
@@ -42,9 +43,18 @@ const HOLD_DURATIONS = [
     { value: 8, label: "8s" }
 ];
 
+// WebSocket configuration
+const WEBSOCKET_URL = 'ws://192.168.1.8/ws'; // Replace with your ESP32 IP address
+
 const PatientDashboard = () => {
     // Tab state
     const [activeTab, setActiveTab] = useState(0);
+
+    // WebSocket states
+    const [wsConnection, setWsConnection] = useState(null);
+    const [wsStatus, setWsStatus] = useState('Disconnected');
+    const [selectedPreset, setSelectedPreset] = useState(null);
+    const wsRef = useRef(null);
 
     // Hand rehabilitation states
     const [isHandRunning, setIsHandRunning] = useState(false);
@@ -66,6 +76,77 @@ const PatientDashboard = () => {
     const [exoConfirmOpen, setExoConfirmOpen] = useState(false);
     const [isExoRunning, setIsExoRunning] = useState(false);
 
+    // WebSocket connection management
+    useEffect(() => {
+        connectWebSocket();
+
+        // Cleanup on component unmount
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, []);
+
+    const connectWebSocket = () => {
+        try {
+            const ws = new WebSocket(WEBSOCKET_URL);
+            wsRef.current = ws;
+
+            ws.onopen = () => {
+                console.log('WebSocket connected to ESP32');
+                setWsStatus('Connected');
+                setWsConnection(ws);
+            };
+
+            ws.onmessage = (event) => {
+                console.log('Message from ESP32:', event.data);
+                // Handle messages from ESP32 if needed
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.status) {
+                        setExoStatus(data.status);
+                    }
+                    if (data.movements !== undefined) {
+                        setExoMovements(data.movements);
+                    }
+                } catch (e) {
+                    // Handle non-JSON messages
+                    console.log('Non-JSON message:', event.data);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                setWsStatus('Disconnected');
+                setWsConnection(null);
+                // Attempt to reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                setWsStatus('Error');
+            };
+
+        } catch (error) {
+            console.error('Failed to create WebSocket connection:', error);
+            setWsStatus('Error');
+        }
+    };
+
+    const sendWebSocketMessage = (message) => {
+        if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+            wsConnection.send(JSON.stringify(message));
+            console.log('Sent to ESP32:', message);
+            return true;
+        } else {
+            console.error('WebSocket not connected');
+            alert('WebSocket not connected to ESP32. Please check connection.');
+            return false;
+        }
+    };
+
     // Simulate exoskeleton movement
     useEffect(() => {
         let interval;
@@ -75,6 +156,8 @@ const PatientDashboard = () => {
                     const newCount = prev + 1;
                     if (newCount >= exoSets * 5) { // Assume 5 movements per set
                         setExoStatus("Complete");
+                        // Send completion message to ESP32
+                        sendWebSocketMessage({ command: "STOP", reason: "completed" });
                         return newCount;
                     }
                     return newCount;
@@ -82,7 +165,7 @@ const PatientDashboard = () => {
             }, 2000);
         }
         return () => clearInterval(interval);
-    }, [exoStatus, exoSets]);
+    }, [exoStatus, exoSets, wsConnection]);
 
     // Firebase listeners for hand rehabilitation
     useEffect(() => {
@@ -186,8 +269,16 @@ const PatientDashboard = () => {
 
     const handleEmergencyStop = async () => {
         try {
+            // Send emergency stop to ESP32
+            if (wsConnection) {
+                sendWebSocketMessage({ command: "EMERGENCY_STOP" });
+            }
+
+            // Firebase emergency stop for hand rehabilitation
             await set(ref(db, 'glove/emergencyStop'), true);
             setExoStatus("Emergency Stop");
+            setIsExoRunning(false);
+            setEmergency(true);
         } catch (error) {
             console.error("Emergency stop failed:", error);
             alert("Emergency stop failed! Check device connection.");
@@ -204,9 +295,24 @@ const PatientDashboard = () => {
     // Exoskeleton functions
     const startExoskeleton = () => {
         try {
-            setExoStatus("Running");
-            setExoMovements(0);
-            setIsExoRunning(true);
+            if (!selectedPreset) {
+                alert("Please select a preset first!");
+                return;
+            }
+
+            // Send preset value to ESP32
+            const success = sendWebSocketMessage({
+                command: "START_PRESET",
+                preset: selectedPreset.presetValue,
+                sets: exoSets,
+                speed: exoSpeed
+            });
+
+            if (success) {
+                setExoStatus("Running");
+                setExoMovements(0);
+                setIsExoRunning(true);
+            }
         } catch (error) {
             console.error("Error starting exoskeleton:", error);
             alert("Failed to start exoskeleton exercise. Please try again.");
@@ -214,15 +320,29 @@ const PatientDashboard = () => {
     };
 
     const resetExoskeleton = () => {
+        // Send reset command to ESP32
+        sendWebSocketMessage({ command: "RESET" });
+
         setExoStatus("Ready");
         setExoMovements(0);
         setIsExoRunning(false);
+        setSelectedPreset(null);
+        setEmergency(false);
     };
 
     const applyExoPreset = (preset) => {
         if (!isExoRunning) {
             setExoSets(preset.sets);
             setExoSpeed(preset.speed);
+            setSelectedPreset(preset);
+
+            // Send preset selection to ESP32 (without starting)
+            sendWebSocketMessage({
+                command: "SELECT_PRESET",
+                preset: preset.presetValue,
+                sets: preset.sets,
+                speed: preset.speed
+            });
         }
     };
 
@@ -236,9 +356,16 @@ const PatientDashboard = () => {
             mt: 4,
             '& .MuiFormControl-root': { mb: 3 }
         }}>
-            <Typography variant="h5" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
-                Patient Dashboard
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5" component="h1" sx={{ fontWeight: 'bold' }}>
+                    Patient Dashboard
+                </Typography>
+                <Chip
+                    label={`WebSocket: ${wsStatus}`}
+                    color={wsStatus === 'Connected' ? 'success' : wsStatus === 'Error' ? 'error' : 'default'}
+                    variant="outlined"
+                />
+            </Box>
 
             <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
                 <Tab label="Hand Rehabilitation" />
@@ -277,7 +404,7 @@ const PatientDashboard = () => {
                         </Typography>
                         <Slider
                             value={cycles}
-                            //onChange={(e, newValue) => setCycles(newValue)}
+                            onChange={(e, newValue) => setCycles(newValue)}
                             min={1}
                             max={10}
                             step={1}
@@ -363,7 +490,7 @@ const PatientDashboard = () => {
                             {EXOSKELETON_PRESETS.map((preset) => (
                                 <Button
                                     key={preset.id}
-                                    variant="outlined"
+                                    variant={selectedPreset?.id === preset.id ? "contained" : "outlined"}
                                     onClick={() => applyExoPreset(preset)}
                                     disabled={isExoRunning}
                                     sx={{ mb: 1 }}
@@ -371,12 +498,17 @@ const PatientDashboard = () => {
                                     <Box textAlign="center">
                                         <Typography>{preset.name}</Typography>
                                         <Typography variant="caption" display="block">
-                                            {preset.sets} sets @ {preset.speed} speed
+                                            Preset {preset.presetValue} - {preset.sets} sets @ {preset.speed} speed
                                         </Typography>
                                     </Box>
                                 </Button>
                             ))}
                         </Box>
+                        {selectedPreset && (
+                            <Alert severity="info" sx={{ mt: 2 }}>
+                                Selected: {selectedPreset.name} (Preset {selectedPreset.presetValue})
+                            </Alert>
+                        )}
                     </Box>
 
                     <Box sx={{ mb: 3 }}>
@@ -385,7 +517,7 @@ const PatientDashboard = () => {
                         </Typography>
                         <Slider
                             value={exoSets}
-                            //onChange={(e, newValue) => setExoSets(newValue)}
+                            onChange={(e, newValue) => setExoSets(newValue)}
                             min={1}
                             max={10}
                             step={1}
@@ -401,7 +533,7 @@ const PatientDashboard = () => {
                         </Typography>
                         <Slider
                             value={exoSpeed}
-                            //onChange={(e, newValue) => setExoSpeed(newValue)}
+                            onChange={(e, newValue) => setExoSpeed(newValue)}
                             min={50}
                             max={255}
                             step={5}
@@ -458,12 +590,15 @@ const PatientDashboard = () => {
                         <Button
                             variant="contained"
                             onClick={() => setExoConfirmOpen(true)}
-                            disabled={isExoRunning || emergency || exoStatus === "Complete"}
+                            disabled={isExoRunning || emergency || exoStatus === "Complete" || !selectedPreset || wsStatus !== 'Connected'}
                             fullWidth
                             sx={{ py: 2 }}
                         >
                             {exoStatus === "Complete" ? 'Exercise Completed' :
-                                isExoRunning ? 'Exoskeleton Active' : 'Start Exoskeleton'}
+                                isExoRunning ? 'Exoskeleton Active' :
+                                    !selectedPreset ? 'Select Preset First' :
+                                        wsStatus !== 'Connected' ? 'WebSocket Disconnected' :
+                                            'Start Exoskeleton'}
                         </Button>
 
                         <Button
@@ -478,7 +613,7 @@ const PatientDashboard = () => {
                         </Button>
                     </Box>
 
-                    {exoStatus === "Complete" && (
+                    {(exoStatus === "Complete" || emergency) && (
                         <Button
                             variant="outlined"
                             onClick={resetExoskeleton}
@@ -548,6 +683,12 @@ const PatientDashboard = () => {
                 </Alert>
             )}
 
+            {wsStatus !== 'Connected' && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                    WebSocket not connected to ESP32. Some features may not work properly.
+                </Alert>
+            )}
+
             {/* Hand Exercise Confirmation Dialog */}
             <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
                 <DialogTitle>Confirm Exercise Start</DialogTitle>
@@ -573,7 +714,8 @@ const PatientDashboard = () => {
                 <DialogTitle>Confirm Exoskeleton Start</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        This will start {exoSets} sets at speed {exoSpeed}. Ensure the exoskeleton is properly fitted.
+                        This will start {selectedPreset?.name} (Preset {selectedPreset?.presetValue}) with {exoSets} sets at speed {exoSpeed}.
+                        Ensure the exoskeleton is properly fitted.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
