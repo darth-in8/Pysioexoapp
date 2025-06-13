@@ -9,6 +9,7 @@ import {
     signOut
 } from 'firebase/auth';
 import { getDatabase, ref, set, get } from 'firebase/database';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCoPj1KYM3xaDcB2i4UQus6wppiR60ITf4",
@@ -25,21 +26,51 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getDatabase(app);
 
+export const onAuthStateChange = (callback) => {
+    return onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            try {
+                const userData = await getUserData(user.uid);
+                callback({ user, userData, isAuthenticated: true });
+            } catch (error) {
+                console.error("Error fetching user data in auth listener:", error);
+                // Handle case where user exists in Firebase Auth but not in database
+                callback({ user, userData: null, isAuthenticated: false });
+            }
+        } else {
+            callback({ user: null, userData: null, isAuthenticated: false });
+        }
+    });
+};
+
 // Authentication Functions
-export const signInWithGoogle = async () => {
+export const signInWithGoogle = async (selectedRole = null) => {
     try {
         const result = await signInWithPopup(auth, googleProvider);
         let userData;
+
         try {
             userData = await getUserData(result.user.uid);
         } catch {
+            // User doesn't exist, need to create profile
+            if (!selectedRole) {
+                // Sign out the user since they need to select a role
+                await signOut(auth);
+                throw new Error('ROLE_SELECTION_REQUIRED');
+            }
+
             userData = {
                 email: result.user.email,
                 fullName: result.user.displayName || 'New User',
-                role: 'patient' // Default role
+                role: selectedRole
             };
             await createUserProfile(result.user.uid, userData);
+
+            // Reload the page after creating new user profile
+            window.location.reload();
+            return; // Don't return anything as page will reload
         }
+
         return { user: result.user, userData };
     } catch (error) {
         console.error("Google Sign-In Error:", error);
@@ -132,6 +163,44 @@ export const getUserData = async (uid) => {
         }
     } catch (error) {
         console.error("Error fetching user data:", error);
+        throw error;
+    }
+};
+
+// Save new Dead Pulse data
+export const saveDeadPulse = async (newData) => {
+    try {
+        const currentRef = ref(db, 'glove/deadPulse/current');
+        const previousRef = ref(db, 'glove/deadPulse/previous');
+
+        // Backup current as previous if it exists
+        const currentSnap = await get(currentRef);
+        if (currentSnap.exists()) {
+            await set(previousRef, currentSnap.val());
+        }
+
+        // Save new current
+        await set(currentRef, {
+            timestamp: Date.now(),
+            data: newData
+        });
+    } catch (error) {
+        console.error("Error saving Dead Pulse data:", error);
+        throw error;
+    }
+};
+
+// Fetch Dead Pulse records
+export const getDeadPulseData = async () => {
+    try {
+        const currentSnap = await get(ref(db, 'glove/deadPulse/current'));
+        const previousSnap = await get(ref(db, 'glove/deadPulse/previous'));
+        return {
+            current: currentSnap.exists() ? currentSnap.val() : null,
+            previous: previousSnap.exists() ? previousSnap.val() : null
+        };
+    } catch (error) {
+        console.error("Error fetching Dead Pulse data:", error);
         throw error;
     }
 };
