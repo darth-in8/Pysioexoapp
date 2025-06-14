@@ -8,8 +8,9 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import PatientDashboard from './pages/PatientDashboard';
 import DoctorDashboard from './pages/DoctorDashboard';
+import ChatPage from './pages/ChatPage'; // Add this import
 
-// Protected Route component
+// Protected Route component - Updated to handle multiple roles
 function ProtectedRoute({ children, requiredRole }) {
     const { currentUser, userData, loading } = useAuth();
 
@@ -33,8 +34,19 @@ function ProtectedRoute({ children, requiredRole }) {
         }
     }
 
-    if (requiredRole && userData?.role !== requiredRole) {
-        return <Navigate to="/" replace />;
+    // Handle multiple roles (for chat route)
+    if (requiredRole) {
+        if (Array.isArray(requiredRole)) {
+            // If requiredRole is an array, check if user's role is in the array
+            if (!requiredRole.includes(userData?.role)) {
+                return <Navigate to="/" replace />;
+            }
+        } else {
+            // Single role check (existing behavior)
+            if (userData?.role !== requiredRole) {
+                return <Navigate to="/" replace />;
+            }
+        }
     }
 
     return children;
@@ -76,6 +88,15 @@ const App = () => {
                             element={
                                 <ProtectedRoute requiredRole="doctor">
                                     <DoctorDashboard />
+                                </ProtectedRoute>
+                            }
+                        />
+                        {/* Chat route accessible by both doctors and patients */}
+                        <Route
+                            path="/chat"
+                            element={
+                                <ProtectedRoute requiredRole={['doctor', 'patient']}>
+                                    <ChatPage />
                                 </ProtectedRoute>
                             }
                         />

@@ -38,16 +38,33 @@ export function AuthProvider({ children }) {
     // ✅ Redirect based on role once user and userData are ready
     useEffect(() => {
         if (!loading && currentUser && userData) {
-            // Don't redirect if user is already on the correct page
+            // Don't redirect if user is already on the correct page or on allowed pages
             const currentPath = location.pathname;
 
-            if (userData.role === 'doctor' && currentPath !== '/doctor') {
-                navigate('/doctor');
-            } else if (userData.role === 'patient' && currentPath !== '/patient') {
-                navigate('/patient');
-            } else if (userData.role !== 'doctor' && userData.role !== 'patient') {
-                console.error("Unknown user role:", userData.role);
-                navigate('/'); // Go to home instead of unknown route
+            // Define allowed paths that don't require role-based redirection
+            const allowedPaths = ['/chat', '/doctor', '/patient', '/'];
+
+            // Only redirect if user is not on an allowed path
+            if (!allowedPaths.includes(currentPath)) {
+                if (userData.role === 'doctor') {
+                    navigate('/doctor');
+                } else if (userData.role === 'patient') {
+                    navigate('/patient');
+                } else {
+                    console.error("Unknown user role:", userData.role);
+                    navigate('/'); // Go to home instead of unknown route
+                }
+            }
+
+            // Only redirect to role-specific dashboard if user is on home page
+            if (currentPath === '/') {
+                if (userData.role === 'doctor') {
+                    navigate('/doctor');
+                } else if (userData.role === 'patient') {
+                    navigate('/patient');
+                } else {
+                    console.error("Unknown user role:", userData.role);
+                }
             }
         }
     }, [loading, currentUser, userData, navigate, location.pathname]);
