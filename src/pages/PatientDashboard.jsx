@@ -32,9 +32,9 @@ const HAND_PRESETS = [
 ];
 
 const EXOSKELETON_PRESETS = [
-    { id: 1, name: "Basic Movement", sets: 4, speed: 150, presetValue: 1 },
-    { id: 2, name: "Strength Training", sets: 6, speed: 200, presetValue: 2 },
-    { id: 3, name: "Recovery Mode", sets: 3, speed: 100, presetValue: 3 }
+    { id: 1, name: "Basic Movement", sets: 4, duration: 2, presetValue: 1 },
+    { id: 2, name: "Strength Training", sets: 6, duration: 3, presetValue: 2 },
+    { id: 3, name: "Recovery Mode", sets: 3, duration: 1, presetValue: 3 }
 ];
 
 const HOLD_DURATIONS = [
@@ -305,7 +305,7 @@ const PatientDashboard = () => {
                 command: "START_PRESET",
                 preset: selectedPreset.presetValue,
                 sets: exoSets,
-                speed: exoSpeed
+                duration: exoSpeed
             });
 
             if (success) {
@@ -333,7 +333,7 @@ const PatientDashboard = () => {
     const applyExoPreset = (preset) => {
         if (!isExoRunning) {
             setExoSets(preset.sets);
-            setExoSpeed(preset.speed);
+            setExoSpeed(preset.duration);
             setSelectedPreset(preset);
 
             // Send preset selection to ESP32 (without starting)
@@ -341,7 +341,7 @@ const PatientDashboard = () => {
                 command: "SELECT_PRESET",
                 preset: preset.presetValue,
                 sets: preset.sets,
-                speed: preset.speed
+                duration: preset.duration
             });
         }
     };
@@ -498,7 +498,7 @@ const PatientDashboard = () => {
                                     <Box textAlign="center">
                                         <Typography>{preset.name}</Typography>
                                         <Typography variant="caption" display="block">
-                                            Preset {preset.presetValue} - {preset.sets} sets @ {preset.speed} speed
+                                            Preset {preset.presetValue} - {preset.sets} sets @ {preset.duration} sec duration
                                         </Typography>
                                     </Box>
                                 </Button>
@@ -529,17 +529,17 @@ const PatientDashboard = () => {
 
                     <Box sx={{ mb: 3 }}>
                         <Typography id="speed-slider" gutterBottom>
-                            Motor Speed: {exoSpeed}
+                            Duration in Seconds: {exoSpeed}
                         </Typography>
                         <Slider
                             value={exoSpeed}
                             onChange={(e, newValue) => setExoSpeed(newValue)}
-                            min={50}
-                            max={255}
-                            step={5}
+                            min={0.5}
+                            max={3.5}
+                            step={0.5}
                             marks={[
-                                { value: 50, label: '50' },
-                                { value: 255, label: '255' }
+                                { value: 0.5, label: '0.5' },
+                                { value: 3.5, label: '3.5' }
                             ]}
                             valueLabelDisplay="auto"
                             disabled={isExoRunning}
